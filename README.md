@@ -20,19 +20,17 @@ Users can upload lecture notes, revision packs, past papers, or other study mate
 
 ## 🖥️ Preview
 
-StudyForge includes four main areas:
+### Home
+![StudyForge Home](assets/dashboard.png)
 
-### Document
-Preview the text extracted from an uploaded PDF.
+### Topic Detection
+![StudyForge Topic Detection](assets/topics.png)
 
-### Topics
-Analyze study material and identify the concepts that matter most.
+### Revision Session
+![StudyForge Revision Session](assets/revision.png)
 
-### Revision
-Choose a topic, answer revision questions, and assess your confidence.
-
-### Progress
-View revision history, confidence scores, and recommended areas to improve.
+### Learning Dashboard
+![StudyForge Learning Dashboard](assets/progress.png)
 
 ## 🛠️ Tech Stack
 
