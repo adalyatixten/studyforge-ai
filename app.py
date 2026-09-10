@@ -1,6 +1,7 @@
 import os
 import re
 import sqlite3
+from html import escape
 
 import pandas as pd
 import streamlit as st
@@ -110,64 +111,52 @@ def detect_topics_locally(text):
             "derivative",
             "derivatives",
         ],
-
         "Product Rule": [
             "product rule",
         ],
-
         "Quotient Rule": [
             "quotient rule",
         ],
-
         "Chain Rule": [
             "chain rule",
         ],
-
         "Implicit Differentiation": [
             "implicit differentiation",
             "differentiate implicitly",
             "implicitly",
         ],
-
         "Tangent and Normal": [
             "tangent",
             "normal to the curve",
             "normal line",
         ],
-
         "Rate of Change": [
             "rate of change",
             "rate at which",
             "related rates",
         ],
-
         "Integration": [
             "integrate",
             "integration",
             "integral",
             "integrals",
         ],
-
         "Definite Integrals": [
             "definite integral",
             "limits of integration",
         ],
-
         "Substitution": [
             "substitution",
             "u-substitution",
             "change of variable",
         ],
-
         "Integration by Parts": [
             "integration by parts",
         ],
-
         "Partial Fractions": [
             "partial fraction",
             "partial fractions",
         ],
-
         "Trigonometric Functions": [
             "trigonometric",
             "sine",
@@ -176,81 +165,66 @@ def detect_topics_locally(text):
             "cos ",
             "tan ",
         ],
-
         "Exponential Functions": [
             "exponential function",
             "exponential functions",
         ],
-
         "Logarithmic Functions": [
             "logarithmic",
             "natural logarithm",
             "ln ",
         ],
-
         "Area Under a Curve": [
             "area under",
             "area bounded",
             "area enclosed",
             "area of the region",
         ],
-
         "Volume": [
             "volume",
             "volume of revolution",
         ],
-
         "Quadratic Equations": [
             "quadratic",
             "quadratic equation",
         ],
-
         "Mean, Median and Mode": [
             "mean",
             "median",
             "mode",
         ],
-
         "Standard Deviation": [
             "standard deviation",
         ],
-
         "Variance": [
             "variance",
         ],
-
         "Quartiles and IQR": [
             "quartile",
             "interquartile",
             "iqr",
         ],
-
         "Normal Distribution": [
             "normal distribution",
             "normally distributed",
         ],
-
         "Z-Score": [
             "z-score",
             "z score",
             "standard score",
         ],
-
         "Binomial Distribution": [
             "binomial distribution",
             "binomial",
         ],
-
         "Poisson Distribution": [
             "poisson distribution",
             "poisson",
         ],
-
         "Correlation": [
             "correlation",
             "correlation coefficient",
         ],
-
         "Regression": [
             "regression",
             "regression line",
@@ -510,7 +484,6 @@ st.markdown(
 # =========================================================
 
 with st.sidebar:
-
     st.title("📚 StudyForge")
 
     st.caption("AI-powered study workspace")
@@ -544,19 +517,14 @@ with st.sidebar:
 
 st.markdown(
     """
-    <div class="hero">
-        <h1>📚 StudyForge AI</h1>
-
-        <p>
-            Turn course materials into structured revision,
-            practice sessions and measurable learning progress.
-        </p>
-
-        <span class="badge">PDF Analysis</span>
-        <span class="badge">Topic Detection</span>
-        <span class="badge">Adaptive Revision</span>
-        <span class="badge">Progress Tracking</span>
-    </div>
+<div class="hero">
+<h1>📚 StudyForge AI</h1>
+<p>Turn course materials into structured revision, practice sessions and measurable learning progress.</p>
+<span class="badge">PDF Analysis</span>
+<span class="badge">Topic Detection</span>
+<span class="badge">Adaptive Revision</span>
+<span class="badge">Progress Tracking</span>
+</div>
     """,
     unsafe_allow_html=True,
 )
@@ -573,7 +541,6 @@ uploaded_file = st.file_uploader(
 
 
 if uploaded_file is None:
-
     st.markdown("### Start a new study session")
 
     col1, col2, col3 = st.columns(3)
@@ -581,13 +548,10 @@ if uploaded_file is None:
     with col1:
         st.markdown(
             """
-            <div class="section-card">
-                <h3>📄 Upload</h3>
-                <p>
-                    Add lecture notes, revision packs,
-                    past papers or textbooks.
-                </p>
-            </div>
+<div class="section-card">
+<h3>📄 Upload</h3>
+<p>Add lecture notes, revision packs, past papers or textbooks.</p>
+</div>
             """,
             unsafe_allow_html=True,
         )
@@ -595,13 +559,10 @@ if uploaded_file is None:
     with col2:
         st.markdown(
             """
-            <div class="section-card">
-                <h3>🧠 Analyze</h3>
-                <p>
-                    StudyForge identifies important
-                    topics automatically.
-                </p>
-            </div>
+<div class="section-card">
+<h3>🧠 Analyze</h3>
+<p>StudyForge identifies important topics automatically.</p>
+</div>
             """,
             unsafe_allow_html=True,
         )
@@ -609,13 +570,10 @@ if uploaded_file is None:
     with col3:
         st.markdown(
             """
-            <div class="section-card">
-                <h3>📊 Improve</h3>
-                <p>
-                    Practice weak topics and track
-                    confidence over time.
-                </p>
-            </div>
+<div class="section-card">
+<h3>📊 Improve</h3>
+<p>Practice weak topics and track confidence over time.</p>
+</div>
             """,
             unsafe_allow_html=True,
         )
@@ -663,6 +621,8 @@ if not text.strip():
 # DOCUMENT SUMMARY
 # =========================================================
 
+progress_data = load_progress()
+
 col1, col2, col3, col4 = st.columns(4)
 
 col1.metric(
@@ -685,13 +645,10 @@ col3.metric(
     ),
 )
 
-progress_data = load_progress()
-
 col4.metric(
     "Study Sessions",
     len(progress_data),
 )
-
 
 st.success(
     f"{uploaded_file.name} loaded successfully."
@@ -717,7 +674,6 @@ document_tab, topics_tab, revision_tab, progress_tab = st.tabs(
 # =========================================================
 
 with document_tab:
-
     st.subheader("Document")
 
     st.caption(
@@ -742,7 +698,6 @@ with document_tab:
 # =========================================================
 
 with topics_tab:
-
     header_col, button_col = st.columns(
         [4, 1]
     )
@@ -755,7 +710,6 @@ with topics_tab:
         )
 
     with button_col:
-
         analyze_clicked = st.button(
             "Analyze material",
             type="primary",
@@ -763,16 +717,13 @@ with topics_tab:
         )
 
     if analyze_clicked:
-
         with st.spinner(
             "Analyzing your study material..."
         ):
-
             topics = None
             analysis_mode = None
 
             if client:
-
                 try:
                     topics = detect_topics_with_ai(text)
 
@@ -780,43 +731,34 @@ with topics_tab:
                         analysis_mode = "AI"
 
                 except RateLimitError:
-
                     st.warning(
                         "API credits unavailable. "
                         "Offline analysis activated."
                     )
 
                 except Exception:
-
                     st.warning(
                         "AI service unavailable. "
                         "Offline analysis activated."
                     )
 
             if not topics:
-
                 topics = detect_topics_locally(text)
-
                 analysis_mode = "Offline"
 
             st.session_state["topics"] = topics
+            st.session_state["analysis_mode"] = analysis_mode
 
-            st.session_state[
-                "analysis_mode"
-            ] = analysis_mode
-
-            st.session_state[
-                "topics_editor"
-            ] = "\n".join(topics)
+            st.session_state["topics_editor"] = "\n".join(
+                topics
+            )
 
     if "topics" not in st.session_state:
-
         st.info(
             "Run an analysis to discover the main study topics."
         )
 
     else:
-
         mode = st.session_state.get(
             "analysis_mode",
             "Offline",
@@ -838,18 +780,18 @@ with topics_tab:
         topic_columns = st.columns(2)
 
         for index, topic in enumerate(topics):
-
             target_column = topic_columns[
                 index % 2
             ]
 
-            with target_column:
+            safe_topic = escape(topic)
 
+            with target_column:
                 st.markdown(
                     f"""
-                    <div class="topic-card">
-                        <b>{index + 1}. {topic}</b>
-                    </div>
+<div class="topic-card">
+<b>{index + 1}. {safe_topic}</b>
+</div>
                     """,
                     unsafe_allow_html=True,
                 )
@@ -859,7 +801,6 @@ with topics_tab:
         with st.expander(
             "✏️ Review or edit detected topics"
         ):
-
             edited_topics = st.text_area(
                 "One topic per line",
                 key="topics_editor",
@@ -869,7 +810,6 @@ with topics_tab:
             if st.button(
                 "Save topic list"
             ):
-
                 reviewed_topics = [
                     topic.strip()
                     for topic
@@ -893,7 +833,6 @@ with topics_tab:
 # =========================================================
 
 with revision_tab:
-
     st.subheader(
         "Revision Session"
     )
@@ -908,13 +847,11 @@ with revision_tab:
     )
 
     if not topics:
-
         st.info(
             "Analyze the document first."
         )
 
     else:
-
         selected_topic = st.selectbox(
             "Topic",
             topics,
@@ -926,28 +863,28 @@ with revision_tab:
 
         st.markdown(
             """
-            <div class="section-card">
-            <b>Goal</b><br>
-            Answer the questions without checking your notes first.
-            </div>
+<div class="section-card">
+<b>Goal</b><br>
+Answer the questions without checking your notes first.
+</div>
             """,
             unsafe_allow_html=True,
         )
 
         st.markdown(
             f"""
-            ### Practice Questions
+### Practice Questions
 
-            **1.** Explain **{selected_topic}** in your own words.
+**1.** Explain **{selected_topic}** in your own words.
 
-            **2.** What are the most important rules,
-            formulas or principles related to **{selected_topic}**?
+**2.** What are the most important rules,
+formulas or principles related to **{selected_topic}**?
 
-            **3.** Give a practical or exam-style example
-            involving **{selected_topic}**.
+**3.** Give a practical or exam-style example
+involving **{selected_topic}**.
 
-            **4.** What common mistakes can occur when
-            working with **{selected_topic}**?
+**4.** What common mistakes can occur when
+working with **{selected_topic}**?
             """
         )
 
@@ -977,7 +914,6 @@ with revision_tab:
             "Save revision result",
             type="primary",
         ):
-
             save_progress(
                 selected_topic,
                 confidence,
@@ -993,7 +929,6 @@ with revision_tab:
 # =========================================================
 
 with progress_tab:
-
     st.subheader(
         "Learning Dashboard"
     )
@@ -1001,14 +936,12 @@ with progress_tab:
     progress_data = load_progress()
 
     if progress_data.empty:
-
         st.info(
             "Complete a revision session "
             "to start building your learning history."
         )
 
     else:
-
         average_scores = (
             progress_data
             .groupby("topic")["confidence"]
@@ -1036,6 +969,10 @@ with progress_tab:
             average_scores.index[-1]
         )
 
+        highest_confidence = (
+            average_scores.max()
+        )
+
         metric1, metric2, metric3, metric4 = st.columns(
             4
         )
@@ -1056,8 +993,12 @@ with progress_tab:
         )
 
         metric4.metric(
-            "Strongest Topic",
-            strongest_topic,
+            "Highest Confidence",
+            f"{highest_confidence:.1f}/5",
+        )
+
+        st.caption(
+            f"Strongest topic: **{strongest_topic}**"
         )
 
         st.divider()
@@ -1067,35 +1008,30 @@ with progress_tab:
         )
 
         with left:
-
             st.markdown(
                 "### Confidence by Topic"
             )
 
             st.bar_chart(
-                average_scores,
+                average_scores
             )
 
         with right:
-
             st.markdown(
                 "### Focus Recommendation"
             )
 
+            safe_weakest_topic = escape(
+                weakest_topic
+            )
+
             st.markdown(
                 f"""
-                <div class="section-card">
-                    <span class="small-muted">
-                        Weakest topic
-                    </span>
-
-                    <h3>{weakest_topic}</h3>
-
-                    <p>
-                        Prioritize this topic during
-                        your next revision session.
-                    </p>
-                </div>
+<div class="section-card">
+<span class="small-muted">Weakest topic</span>
+<h3>{safe_weakest_topic}</h3>
+<p>Prioritize this topic during your next revision session.</p>
+</div>
                 """,
                 unsafe_allow_html=True,
             )
