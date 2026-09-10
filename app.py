@@ -17,7 +17,6 @@ from pypdf import PdfReader
 load_dotenv()
 
 API_KEY = os.getenv("OPENAI_API_KEY")
-
 client = OpenAI(api_key=API_KEY) if API_KEY else None
 
 DB_FILE = "studyforge.db"
@@ -86,13 +85,15 @@ def load_progress():
 def extract_pdf_text(uploaded_file):
     reader = PdfReader(uploaded_file)
 
-    text = ""
+    text_parts = []
 
     for page in reader.pages:
         page_text = page.extract_text()
 
         if page_text:
-            text += page_text + "\n"
+            text_parts.append(page_text)
+
+    text = "\n".join(text_parts)
 
     return text, len(reader.pages)
 
@@ -102,57 +103,338 @@ def extract_pdf_text(uploaded_file):
 # =========================================================
 
 def detect_topics_locally(text):
-    keyword_extractor = yake.KeywordExtractor(
-        lan="en",
-        n=3,
-        dedupLim=0.85,
-        top=30,
-    )
+    text_lower = text.lower()
 
-    keywords = keyword_extractor.extract_keywords(text)
+    # -----------------------------------------------------
+    # Known academic concepts
+    # -----------------------------------------------------
 
-    blocked_words = {
-        "question",
-        "questions",
-        "solution",
-        "answer",
-        "answers",
-        "marking guide",
-        "examination",
-        "final examination",
-        "student",
-        "students",
-        "marks",
-        "technical mathematics",
-        "subject title",
-        "subject code",
-        "semester",
-        "intake",
-        "total marks",
+    topic_patterns = {
+        # CALCULUS
+        "Differentiation": [
+            "differentiate",
+            "differentiation",
+            "derivative",
+            "derivatives",
+        ],
+
+        "Product Rule": [
+            "product rule",
+        ],
+
+        "Quotient Rule": [
+            "quotient rule",
+        ],
+
+        "Chain Rule": [
+            "chain rule",
+        ],
+
+        "Implicit Differentiation": [
+            "implicit differentiation",
+            "differentiate implicitly",
+            "implicitly",
+        ],
+
+        "Tangent and Normal": [
+            "tangent",
+            "normal to the curve",
+            "normal line",
+        ],
+
+        "Rate of Change": [
+            "rate of change",
+            "rate at which",
+            "related rates",
+            "increasing at a rate",
+            "decreasing at a rate",
+        ],
+
+        "Integration": [
+            "integrate",
+            "integration",
+            "integral",
+            "integrals",
+        ],
+
+        "Definite Integrals": [
+            "definite integral",
+            "definite integrals",
+            "limits of integration",
+        ],
+
+        "Substitution": [
+            "substitution",
+            "u-substitution",
+            "change of variable",
+        ],
+
+        "Integration by Parts": [
+            "integration by parts",
+        ],
+
+        "Partial Fractions": [
+            "partial fraction",
+            "partial fractions",
+        ],
+
+        "Trigonometric Functions": [
+            "trigonometric",
+            "sin ",
+            "cos ",
+            "tan ",
+            "sine",
+            "cosine",
+        ],
+
+        "Exponential Functions": [
+            "exponential function",
+            "exponential functions",
+            "e^",
+        ],
+
+        "Logarithmic Functions": [
+            "logarithmic",
+            "natural logarithm",
+            "ln ",
+        ],
+
+        "Area Under a Curve": [
+            "area under",
+            "area bounded",
+            "area of the region",
+            "area enclosed",
+        ],
+
+        "Volume": [
+            "volume",
+            "volume of revolution",
+        ],
+
+        # ALGEBRA
+        "Quadratic Equations": [
+            "quadratic",
+            "quadratic equation",
+        ],
+
+        "Functions": [
+            "function",
+            "functions",
+            "domain",
+            "range",
+        ],
+
+        "Logarithms": [
+            "logarithm",
+            "logarithms",
+        ],
+
+        # STATISTICS
+        "Mean, Median and Mode": [
+            "mean",
+            "median",
+            "mode",
+        ],
+
+        "Standard Deviation": [
+            "standard deviation",
+        ],
+
+        "Variance": [
+            "variance",
+        ],
+
+        "Quartiles and IQR": [
+            "quartile",
+            "quartiles",
+            "interquartile",
+            "iqr",
+        ],
+
+        "Normal Distribution": [
+            "normal distribution",
+            "normally distributed",
+        ],
+
+        "Z-Score": [
+            "z-score",
+            "z score",
+            "standard score",
+        ],
+
+        "Binomial Distribution": [
+            "binomial distribution",
+            "binomial",
+        ],
+
+        "Poisson Distribution": [
+            "poisson distribution",
+            "poisson",
+        ],
+
+        "Correlation": [
+            "correlation",
+            "correlation coefficient",
+        ],
+
+        "Regression": [
+            "regression",
+            "regression line",
+        ],
+
+        # PROGRAMMING
+        "Functions in Programming": [
+            "function",
+            "method",
+            "parameter",
+            "return value",
+        ],
+
+        "Loops": [
+            "for loop",
+            "while loop",
+            "iteration",
+        ],
+
+        "Conditional Statements": [
+            "if statement",
+            "else statement",
+            "conditional statement",
+        ],
+
+        "Object-Oriented Programming": [
+            "object-oriented",
+            "object oriented",
+            "class",
+            "object",
+            "inheritance",
+        ],
+
+        "Databases": [
+            "database",
+            "sql",
+            "table",
+            "query",
+        ],
     }
+
+    scored_topics = []
+
+    # -----------------------------------------------------
+    # Score known concepts
+    # -----------------------------------------------------
+
+    for topic, patterns in topic_patterns.items():
+        score = 0
+
+        for pattern in patterns:
+            occurrences = text_lower.count(pattern)
+
+            # More specific phrases get slightly more weight
+            if " " in pattern:
+                score += occurrences * 2
+            else:
+                score += occurrences
+
+        if score > 0:
+            scored_topics.append(
+                (topic, score)
+            )
+
+    scored_topics.sort(
+        key=lambda item: item[1],
+        reverse=True,
+    )
 
     topics = []
 
-    for keyword, score in keywords:
-        cleaned = keyword.strip().title()
-        cleaned_lower = cleaned.lower()
+    for topic, score in scored_topics:
+        if topic not in topics:
+            topics.append(topic)
 
-        if len(cleaned) < 4:
-            continue
+    # -----------------------------------------------------
+    # YAKE fallback
+    # -----------------------------------------------------
 
-        if any(
-            blocked_word in cleaned_lower
-            for blocked_word in blocked_words
-        ):
-            continue
+    if len(topics) < 6:
+        keyword_extractor = yake.KeywordExtractor(
+            lan="en",
+            n=3,
+            dedupLim=0.85,
+            top=40,
+        )
 
-        if cleaned not in topics:
-            topics.append(cleaned)
+        keywords = keyword_extractor.extract_keywords(text)
 
-        if len(topics) == 12:
-            break
+        blocked_phrases = {
+            "question",
+            "questions",
+            "solution",
+            "solutions",
+            "answer",
+            "answers",
+            "marking guide",
+            "final examination",
+            "examination",
+            "exam",
+            "student",
+            "students",
+            "marks",
+            "technical mathematics",
+            "subject title",
+            "subject code",
+            "semester",
+            "intake",
+            "total marks",
+            "materials allowed",
+            "materials allowed standard",
+            "allowed standard",
+            "allowed standard items",
+            "standard items",
+            "science and technology",
+            "foundation in science",
+            "fia final",
+            "time allowed",
+            "reading time",
+            "working time",
+            "special items",
+            "standard items pens",
+            "calculator",
+            "calculators",
+            "eraser",
+            "pencils",
+            "dictionary",
+        }
 
-    return topics
+        for keyword, score in keywords:
+            cleaned = keyword.strip()
+            cleaned_lower = cleaned.lower()
+
+            if len(cleaned) < 4:
+                continue
+
+            if any(
+                blocked in cleaned_lower
+                for blocked in blocked_phrases
+            ):
+                continue
+
+            # Skip things that look like exam metadata
+            if re.search(
+                r"\b(question|mark|marks|paper|semester|subject)\b",
+                cleaned_lower,
+            ):
+                continue
+
+            cleaned = cleaned.title()
+
+            if cleaned not in topics:
+                topics.append(cleaned)
+
+            if len(topics) >= 12:
+                break
+
+    return topics[:12]
 
 
 # =========================================================
@@ -168,18 +450,21 @@ def detect_topics_with_ai(text):
         input=f"""
 You are an academic study assistant.
 
-Analyze the study material below.
+Analyze the study material below and identify the main
+academic topics that a student should revise.
 
-Identify the most important topics a student needs to revise.
+Important rules:
 
-Rules:
-- Return only topic names.
+- Return only genuine academic topics.
+- Ignore exam instructions.
+- Ignore marks, materials allowed, time limits and metadata.
+- Prefer specific concepts such as "Chain Rule",
+  "Integration by Parts" or "Normal Distribution".
 - One topic per line.
-- Do not number them.
+- Do not number the topics.
 - Do not use bullet points.
 - Do not include explanations.
-- Prefer specific academic concepts.
-- Return around 8 to 12 topics.
+- Return approximately 8 to 12 topics.
 
 DOCUMENT:
 
@@ -198,14 +483,14 @@ DOCUMENT:
             line,
         ).strip()
 
-        if cleaned:
+        if cleaned and cleaned not in topics:
             topics.append(cleaned)
 
     return topics[:12]
 
 
 # =========================================================
-# APP SETUP
+# INITIALIZE APP
 # =========================================================
 
 init_database()
@@ -237,7 +522,11 @@ if uploaded_file is None:
     st.info("Upload a PDF to begin.")
 
 else:
-    # Reset topics when a different PDF is uploaded
+
+    # -----------------------------------------------------
+    # Reset data when another PDF is uploaded
+    # -----------------------------------------------------
+
     if (
         "uploaded_file_name" not in st.session_state
         or st.session_state["uploaded_file_name"] != uploaded_file.name
@@ -248,17 +537,24 @@ else:
         st.session_state.pop("topics_editor", None)
         st.session_state.pop("analysis_mode", None)
 
-    # Extract PDF text
+    # -----------------------------------------------------
+    # Read PDF
+    # -----------------------------------------------------
+
     try:
         text, page_count = extract_pdf_text(uploaded_file)
 
     except Exception as error:
-        st.error(f"Could not read PDF: {error}")
+        st.error(
+            f"Could not read the PDF: {error}"
+        )
         st.stop()
 
     st.success("PDF uploaded successfully!")
 
-    st.write(f"**Pages:** {page_count}")
+    st.write(
+        f"**Pages:** {page_count}"
+    )
 
     if not text.strip():
         st.warning(
@@ -280,10 +576,11 @@ else:
     )
 
     # =====================================================
-    # DOCUMENT TAB
+    # DOCUMENT
     # =====================================================
 
     with document_tab:
+
         st.subheader("Document Preview")
 
         st.text_area(
@@ -297,43 +594,58 @@ else:
         )
 
     # =====================================================
-    # TOPICS TAB
+    # TOPICS
     # =====================================================
 
     with topics_tab:
+
         st.subheader("Study Topics")
 
         if st.button(
             "Analyze study material",
             type="primary",
         ):
-            with st.spinner("Analyzing document..."):
+
+            with st.spinner(
+                "Analyzing document..."
+            ):
 
                 topics = None
                 analysis_mode = None
 
+                # -----------------------------------------
                 # Try OpenAI first
+                # -----------------------------------------
+
                 if client:
+
                     try:
                         topics = detect_topics_with_ai(text)
-                        analysis_mode = "AI"
+
+                        if topics:
+                            analysis_mode = "AI"
 
                     except RateLimitError:
+
                         st.warning(
                             "OpenAI API credits are currently unavailable. "
-                            "Using local topic detection instead."
+                            "Using offline topic detection instead."
                         )
 
                     except Exception:
+
                         st.warning(
                             "AI analysis is currently unavailable. "
-                            "Using local topic detection instead."
+                            "Using offline topic detection instead."
                         )
 
-                # Local fallback
+                # -----------------------------------------
+                # Offline fallback
+                # -----------------------------------------
+
                 if not topics:
                     topics = detect_topics_locally(text)
-                    analysis_mode = "Local"
+                    analysis_mode = "Offline"
 
                 st.session_state["topics"] = topics
                 st.session_state["analysis_mode"] = analysis_mode
@@ -342,23 +654,32 @@ else:
                     topics
                 )
 
-        # Display detected topics
+        # ---------------------------------------------
+        # Display topics
+        # ---------------------------------------------
+
         if "topics" in st.session_state:
+
             mode = st.session_state.get(
                 "analysis_mode",
                 "Unknown",
             )
 
             if mode == "AI":
+
                 st.success(
                     "Topics detected using AI."
                 )
+
             else:
+
                 st.info(
-                    "Topics detected using local analysis."
+                    "Topics detected using offline analysis."
                 )
 
-            st.write("### Detected Topics")
+            st.write(
+                "### Detected Topics"
+            )
 
             edited_topics = st.text_area(
                 "Review or edit the topics",
@@ -366,7 +687,10 @@ else:
                 height=300,
             )
 
-            if st.button("Save reviewed topics"):
+            if st.button(
+                "Save reviewed topics"
+            ):
+
                 reviewed_topics = [
                     topic.strip()
                     for topic in edited_topics.splitlines()
@@ -375,29 +699,39 @@ else:
 
                 st.session_state["topics"] = reviewed_topics
 
-                st.success("Topics updated successfully.")
+                st.success(
+                    "Topics updated successfully."
+                )
 
-            st.write("### Current Topic List")
+            st.write(
+                "### Current Topic List"
+            )
 
             for number, topic in enumerate(
                 st.session_state["topics"],
                 start=1,
             ):
+
                 st.write(
                     f"{number}. **{topic}**"
                 )
 
         else:
+
             st.info(
-                "Click 'Analyze study material' to detect topics."
+                "Click 'Analyze study material' "
+                "to detect topics."
             )
 
     # =====================================================
-    # REVISION TAB
+    # REVISION
     # =====================================================
 
     with revision_tab:
-        st.subheader("Revision Session")
+
+        st.subheader(
+            "Revision Session"
+        )
 
         topics = st.session_state.get(
             "topics",
@@ -405,18 +739,22 @@ else:
         )
 
         if not topics:
+
             st.info(
-                "Analyze the document first to create "
-                "a revision session."
+                "Analyze the document first "
+                "to create a revision session."
             )
 
         else:
+
             selected_topic = st.selectbox(
                 "Choose a topic",
                 topics,
             )
 
-            st.write("### Practice Questions")
+            st.write(
+                "### Practice Questions"
+            )
 
             st.write(
                 f"1. Explain **{selected_topic}** "
@@ -457,6 +795,7 @@ else:
                 "Save progress",
                 type="primary",
             ):
+
                 save_progress(
                     selected_topic,
                     confidence,
@@ -467,43 +806,52 @@ else:
                 )
 
     # =====================================================
-    # PROGRESS TAB
+    # PROGRESS
     # =====================================================
 
     with progress_tab:
-        st.subheader("Learning Progress")
+
+        st.subheader(
+            "Learning Progress"
+        )
 
         progress_data = load_progress()
 
         if progress_data.empty:
+
             st.info(
                 "Complete a revision session "
                 "to start tracking progress."
             )
 
         else:
-            latest_scores = (
+
+            average_scores = (
                 progress_data
                 .groupby("topic")["confidence"]
                 .mean()
                 .sort_values()
             )
 
-            # ---------------------------------------------
-            # Metrics
-            # ---------------------------------------------
-
             average_confidence = (
                 progress_data["confidence"].mean()
             )
 
-            total_sessions = len(progress_data)
+            total_sessions = len(
+                progress_data
+            )
 
             topics_practiced = (
                 progress_data["topic"].nunique()
             )
 
-            weakest_topic = latest_scores.index[0]
+            weakest_topic = (
+                average_scores.index[0]
+            )
+
+            # -----------------------------------------
+            # Metrics
+            # -----------------------------------------
 
             metric1, metric2, metric3 = st.columns(3)
 
@@ -524,30 +872,34 @@ else:
 
             st.divider()
 
-            # ---------------------------------------------
+            # -----------------------------------------
             # Chart
-            # ---------------------------------------------
+            # -----------------------------------------
 
-            st.write("### Average Confidence by Topic")
-
-            st.bar_chart(
-                latest_scores,
+            st.write(
+                "### Average Confidence by Topic"
             )
 
-            # ---------------------------------------------
-            # Weakest Topic
-            # ---------------------------------------------
+            st.bar_chart(
+                average_scores
+            )
+
+            # -----------------------------------------
+            # Weakest topic
+            # -----------------------------------------
 
             st.warning(
                 f"Current weakest topic: "
                 f"**{weakest_topic}**"
             )
 
-            # ---------------------------------------------
+            # -----------------------------------------
             # History
-            # ---------------------------------------------
+            # -----------------------------------------
 
-            st.write("### Study History")
+            st.write(
+                "### Study History"
+            )
 
             st.dataframe(
                 progress_data,
