@@ -1,18 +1,18 @@
 import os
 import re
 import sqlite3
-from collections import Counter
 
 import pandas as pd
 import streamlit as st
+import yake
 from dotenv import load_dotenv
 from openai import OpenAI, RateLimitError
 from pypdf import PdfReader
 
 
-# -----------------------------
-# Configuration
-# -----------------------------
+# =========================================================
+# CONFIGURATION
+# =========================================================
 
 load_dotenv()
 
@@ -23,13 +23,12 @@ client = OpenAI(api_key=API_KEY) if API_KEY else None
 DB_FILE = "studyforge.db"
 
 
-# -----------------------------
-# Database
-# -----------------------------
+# =========================================================
+# DATABASE
+# =========================================================
 
 def init_database():
     connection = sqlite3.connect(DB_FILE)
-
     cursor = connection.cursor()
 
     cursor.execute(
@@ -49,7 +48,6 @@ def init_database():
 
 def save_progress(topic, confidence):
     connection = sqlite3.connect(DB_FILE)
-
     cursor = connection.cursor()
 
     cursor.execute(
@@ -81,9 +79,9 @@ def load_progress():
     return dataframe
 
 
-# -----------------------------
-# PDF Processing
-# -----------------------------
+# =========================================================
+# PDF PROCESSING
+# =========================================================
 
 def extract_pdf_text(uploaded_file):
     reader = PdfReader(uploaded_file)
@@ -99,42 +97,67 @@ def extract_pdf_text(uploaded_file):
     return text, len(reader.pages)
 
 
-# -----------------------------
-# Local Topic Detection
-# -----------------------------
-
-STOP_WORDS = {
-    "the", "and", "for", "that", "with", "this", "from",
-    "are", "was", "were", "have", "has", "into", "your",
-    "you", "will", "can", "not", "all", "but", "using",
-    "question", "questions", "answer", "answers",
-    "mark", "marks", "page", "exam", "examination",
-    "student", "students"
-}
-
+# =========================================================
+# LOCAL TOPIC DETECTION
+# =========================================================
 
 def detect_topics_locally(text):
-    words = re.findall(r"[A-Za-z][A-Za-z\-]{3,}", text.lower())
+    keyword_extractor = yake.KeywordExtractor(
+        lan="en",
+        n=3,
+        dedupLim=0.85,
+        top=30,
+    )
 
-    filtered_words = [
-        word
-        for word in words
-        if word not in STOP_WORDS
-    ]
+    keywords = keyword_extractor.extract_keywords(text)
 
-    counts = Counter(filtered_words)
+    blocked_words = {
+        "question",
+        "questions",
+        "solution",
+        "answer",
+        "answers",
+        "marking guide",
+        "examination",
+        "final examination",
+        "student",
+        "students",
+        "marks",
+        "technical mathematics",
+        "subject title",
+        "subject code",
+        "semester",
+        "intake",
+        "total marks",
+    }
 
-    common_words = counts.most_common(12)
+    topics = []
 
-    return [
-        word.replace("-", " ").title()
-        for word, _ in common_words
-    ]
+    for keyword, score in keywords:
+        cleaned = keyword.strip().title()
+        cleaned_lower = cleaned.lower()
+
+        if len(cleaned) < 4:
+            continue
+
+        if any(
+            blocked_word in cleaned_lower
+            for blocked_word in blocked_words
+        ):
+            continue
+
+        if cleaned not in topics:
+            topics.append(cleaned)
+
+        if len(topics) == 12:
+            break
+
+    return topics
 
 
-# -----------------------------
-# AI Topic Detection
-# -----------------------------
+# =========================================================
+# AI TOPIC DETECTION
+# =========================================================
 
 def detect_topics_with_ai(text):
     if not client:
@@ -145,12 +168,18 @@ def detect_topics_with_ai(text):
         input=f"""
 You are an academic study assistant.
 
-Analyze the following study material.
+Analyze the study material below.
 
-Identify the most important study topics and subtopics
-that a student should revise for an examination.
+Identify the most important topics a student needs to revise.
 
-Return a concise Markdown list.
+Rules:
+- Return only topic names.
+- One topic per line.
+- Do not number them.
+- Do not use bullet points.
+- Do not include explanations.
+- Prefer specific academic concepts.
+- Return around 8 to 12 topics.
 
 DOCUMENT:
 
@@ -158,12 +187,26 @@ DOCUMENT:
 """
     )
 
-    return response.output_text
+    raw_topics = response.output_text
+
+    topics = []
+
+    for line in raw_topics.splitlines():
+        cleaned = re.sub(
+            r"^[\-\*\d\.\)\s]+",
+            "",
+            line,
+        ).strip()
+
+        if cleaned:
+            topics.append(cleaned)
+
+    return topics[:12]
 
 
-# -----------------------------
-# App
-# -----------------------------
+# =========================================================
+# APP SETUP
+# =========================================================
 
 init_database()
 
@@ -179,6 +222,11 @@ st.write(
     "Turn your study materials into structured revision sessions."
 )
 
+
+# =========================================================
+# FILE UPLOAD
+# =========================================================
+
 uploaded_file = st.file_uploader(
     "Upload your study material",
     type="pdf",
@@ -189,13 +237,40 @@ if uploaded_file is None:
     st.info("Upload a PDF to begin.")
 
 else:
-    text, page_count = extract_pdf_text(uploaded_file)
+    # Reset topics when a different PDF is uploaded
+    if (
+        "uploaded_file_name" not in st.session_state
+        or st.session_state["uploaded_file_name"] != uploaded_file.name
+    ):
+        st.session_state["uploaded_file_name"] = uploaded_file.name
+
+        st.session_state.pop("topics", None)
+        st.session_state.pop("topics_editor", None)
+        st.session_state.pop("analysis_mode", None)
+
+    # Extract PDF text
+    try:
+        text, page_count = extract_pdf_text(uploaded_file)
+
+    except Exception as error:
+        st.error(f"Could not read PDF: {error}")
+        st.stop()
 
     st.success("PDF uploaded successfully!")
 
     st.write(f"**Pages:** {page_count}")
 
-    document_tab, topics_tab, quiz_tab, progress_tab = st.tabs(
+    if not text.strip():
+        st.warning(
+            "No readable text was found in this PDF."
+        )
+        st.stop()
+
+    # =====================================================
+    # TABS
+    # =====================================================
+
+    document_tab, topics_tab, revision_tab, progress_tab = st.tabs(
         [
             "📄 Document",
             "🧠 Topics",
@@ -204,12 +279,11 @@ else:
         ]
     )
 
-    # -----------------------------
-    # Document
-    # -----------------------------
+    # =====================================================
+    # DOCUMENT TAB
+    # =====================================================
 
     with document_tab:
-
         st.subheader("Document Preview")
 
         st.text_area(
@@ -222,83 +296,121 @@ else:
             f"Extracted approximately {len(text):,} characters."
         )
 
-    # -----------------------------
-    # Topics
-    # -----------------------------
+    # =====================================================
+    # TOPICS TAB
+    # =====================================================
 
     with topics_tab:
-
         st.subheader("Study Topics")
 
-        if st.button("Analyze study material"):
-
+        if st.button(
+            "Analyze study material",
+            type="primary",
+        ):
             with st.spinner("Analyzing document..."):
 
-                try:
-                    ai_topics = detect_topics_with_ai(text)
+                topics = None
+                analysis_mode = None
 
-                    if ai_topics:
+                # Try OpenAI first
+                if client:
+                    try:
+                        topics = detect_topics_with_ai(text)
+                        analysis_mode = "AI"
 
-                        st.session_state["ai_topics"] = ai_topics
+                    except RateLimitError:
+                        st.warning(
+                            "OpenAI API credits are currently unavailable. "
+                            "Using local topic detection instead."
+                        )
 
-                        st.success("AI analysis completed.")
+                    except Exception:
+                        st.warning(
+                            "AI analysis is currently unavailable. "
+                            "Using local topic detection instead."
+                        )
 
-                    else:
+                # Local fallback
+                if not topics:
+                    topics = detect_topics_locally(text)
+                    analysis_mode = "Local"
 
-                        raise ValueError("AI unavailable")
+                st.session_state["topics"] = topics
+                st.session_state["analysis_mode"] = analysis_mode
 
-                except (RateLimitError, ValueError):
+                st.session_state["topics_editor"] = "\n".join(
+                    topics
+                )
 
-                    st.warning(
-                        "OpenAI API credits are currently unavailable. "
-                        "Using local topic detection instead."
-                    )
+        # Display detected topics
+        if "topics" in st.session_state:
+            mode = st.session_state.get(
+                "analysis_mode",
+                "Unknown",
+            )
 
-                    local_topics = detect_topics_locally(text)
-
-                    st.session_state["local_topics"] = local_topics
-
-        if "ai_topics" in st.session_state:
-
-            st.markdown(st.session_state["ai_topics"])
-
-        elif "local_topics" in st.session_state:
+            if mode == "AI":
+                st.success(
+                    "Topics detected using AI."
+                )
+            else:
+                st.info(
+                    "Topics detected using local analysis."
+                )
 
             st.write("### Detected Topics")
 
+            edited_topics = st.text_area(
+                "Review or edit the topics",
+                key="topics_editor",
+                height=300,
+            )
+
+            if st.button("Save reviewed topics"):
+                reviewed_topics = [
+                    topic.strip()
+                    for topic in edited_topics.splitlines()
+                    if topic.strip()
+                ]
+
+                st.session_state["topics"] = reviewed_topics
+
+                st.success("Topics updated successfully.")
+
+            st.write("### Current Topic List")
+
             for number, topic in enumerate(
-                st.session_state["local_topics"],
+                st.session_state["topics"],
                 start=1,
             ):
-                st.write(f"{number}. **{topic}**")
+                st.write(
+                    f"{number}. **{topic}**"
+                )
 
         else:
-
             st.info(
                 "Click 'Analyze study material' to detect topics."
             )
 
-    # -----------------------------
-    # Revision
-    # -----------------------------
+    # =====================================================
+    # REVISION TAB
+    # =====================================================
 
-    with quiz_tab:
-
+    with revision_tab:
         st.subheader("Revision Session")
 
         topics = st.session_state.get(
-            "local_topics",
+            "topics",
             [],
         )
 
         if not topics:
-
             st.info(
-                "Analyze the document first to create a revision session."
+                "Analyze the document first to create "
+                "a revision session."
             )
 
         else:
-
             selected_topic = st.selectbox(
                 "Choose a topic",
                 topics,
@@ -307,22 +419,25 @@ else:
             st.write("### Practice Questions")
 
             st.write(
-                f"1. Explain **{selected_topic}** in your own words."
+                f"1. Explain **{selected_topic}** "
+                f"in your own words."
             )
 
             st.write(
-                f"2. What are the most important rules or formulas "
-                f"related to **{selected_topic}**?"
+                f"2. What are the most important rules "
+                f"or formulas related to "
+                f"**{selected_topic}**?"
             )
 
             st.write(
-                f"3. Give an example where **{selected_topic}** "
-                f"would be used."
+                f"3. Give an example where "
+                f"**{selected_topic}** would be used."
             )
 
             st.write(
-                f"4. What mistakes could a student make when solving "
-                f"a problem involving **{selected_topic}**?"
+                f"4. What mistakes could a student make "
+                f"when solving a problem involving "
+                f"**{selected_topic}**?"
             )
 
             st.divider()
@@ -334,33 +449,39 @@ else:
                 value=3,
             )
 
-            if st.button("Save progress"):
+            st.caption(
+                "1 = Very weak • 5 = Very confident"
+            )
 
+            if st.button(
+                "Save progress",
+                type="primary",
+            ):
                 save_progress(
                     selected_topic,
                     confidence,
                 )
 
-                st.success("Progress saved!")
+                st.success(
+                    "Progress saved successfully!"
+                )
 
-    # -----------------------------
-    # Progress
-    # -----------------------------
+    # =====================================================
+    # PROGRESS TAB
+    # =====================================================
 
     with progress_tab:
-
         st.subheader("Learning Progress")
 
         progress_data = load_progress()
 
         if progress_data.empty:
-
             st.info(
-                "Complete a revision session to start tracking progress."
+                "Complete a revision session "
+                "to start tracking progress."
             )
 
         else:
-
             latest_scores = (
                 progress_data
                 .groupby("topic")["confidence"]
@@ -368,19 +489,68 @@ else:
                 .sort_values()
             )
 
-            st.write("### Average Confidence")
+            # ---------------------------------------------
+            # Metrics
+            # ---------------------------------------------
 
-            st.bar_chart(latest_scores)
+            average_confidence = (
+                progress_data["confidence"].mean()
+            )
+
+            total_sessions = len(progress_data)
+
+            topics_practiced = (
+                progress_data["topic"].nunique()
+            )
+
+            weakest_topic = latest_scores.index[0]
+
+            metric1, metric2, metric3 = st.columns(3)
+
+            metric1.metric(
+                "Revision Sessions",
+                total_sessions,
+            )
+
+            metric2.metric(
+                "Topics Practiced",
+                topics_practiced,
+            )
+
+            metric3.metric(
+                "Average Confidence",
+                f"{average_confidence:.1f}/5",
+            )
+
+            st.divider()
+
+            # ---------------------------------------------
+            # Chart
+            # ---------------------------------------------
+
+            st.write("### Average Confidence by Topic")
+
+            st.bar_chart(
+                latest_scores,
+            )
+
+            # ---------------------------------------------
+            # Weakest Topic
+            # ---------------------------------------------
+
+            st.warning(
+                f"Current weakest topic: "
+                f"**{weakest_topic}**"
+            )
+
+            # ---------------------------------------------
+            # History
+            # ---------------------------------------------
 
             st.write("### Study History")
 
             st.dataframe(
                 progress_data,
                 use_container_width=True,
-            )
-
-            weakest_topic = latest_scores.index[0]
-
-            st.warning(
-                f"Current weakest topic: **{weakest_topic}**"
+                hide_index=True,
             )
