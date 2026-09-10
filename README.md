@@ -4,6 +4,8 @@ StudyForge AI is a study assistant that turns PDF course materials into structur
 
 Users can upload lecture notes, revision packs, past papers, or other study materials. StudyForge extracts the document text, detects important academic topics, creates revision sessions, and tracks confidence across topics.
 
+🌐 **Live Demo:** https://studyforge-ai.streamlit.app/
+
 ## ✨ Features
 
 - 📄 Upload and process PDF study materials
@@ -73,6 +75,8 @@ Topic Analysis
             ↓
      Progress Dashboard
 ```
+
+[🚀 Open StudyForge AI](https://studyforge-ai.streamlit.app/)
 
 ## 🚀 Getting Started
 
